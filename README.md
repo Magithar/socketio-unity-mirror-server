@@ -31,17 +31,9 @@ graph TD
 
 ## Setup
 
-### 1. Create the Unity project in this folder
+### 1. Open the Unity project
 
-Open Unity Hub → New Project → location = this repo root → Unity 6.3 LTS.
-
-After Unity finishes, add packages via Window → Package Manager → Add from Git URL:
-
-```
-https://github.com/Magithar/socketio-unity.git
-```
-
-Then import Mirror from the Asset Store or your preferred UPM source.
+The Unity project is already in this repo at `mirror-server-demo/`. Open it in Unity Hub (Unity 6.3 LTS).
 
 ### 2. Configure the NetworkManager
 
@@ -58,14 +50,9 @@ Repo Settings → Secrets and variables → Actions:
 
 | Secret | Value |
 |---|---|
-| `UNITY_LICENSE` | Contents of your `Unity_v*.ulf` license file |
-| `UNITY_EMAIL` | Unity account email |
-| `UNITY_PASSWORD` | Unity account password |
 | `EDGEGAP_REGISTRY_USER` | Edgegap registry username |
 | `EDGEGAP_REGISTRY_TOKEN` | Edgegap registry token |
 | `EDGEGAP_ORG` | Your Edgegap org slug |
-
-Generate a Unity license file: follow [GameCI activation](https://game.ci/docs/github/activation).
 
 ### 4. Configure Edgegap app
 
@@ -80,10 +67,11 @@ App Version → add two ports:
 
 ## Deploy
 
-Push to `main`. The `build-server.yml` workflow:
-1. Builds the Linux dedicated server via GameCI
-2. Packages it as a Docker image
-3. Pushes to Edgegap's container registry
+1. Build the Linux dedicated server locally in Unity: **File → Build Settings → Server Build → Build**.
+2. Zip the output: `zip -j server-linux.zip <build-output-dir>/*`
+3. Publish a GitHub Release and attach `server-linux.zip` as a release asset.
+
+The `build-server.yml` workflow fires on release publish, downloads the zip, packages it as a Docker image, and pushes to Edgegap's container registry.
 
 Then in the Edgegap dashboard → select latest app version → **Deploy**.
 
