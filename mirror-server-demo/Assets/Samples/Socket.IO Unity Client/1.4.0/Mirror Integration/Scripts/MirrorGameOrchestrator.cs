@@ -1,6 +1,13 @@
 using Mirror;
 using UnityEngine;
 
+public enum ServerMode
+{
+    PeerToPeer,
+    DedicatedKCP,
+    DedicatedWebSocket,
+}
+
 /// <summary>
 /// Controls the Lobby → Mirror game flow.
 ///
@@ -25,6 +32,15 @@ public class MirrorGameOrchestrator : MonoBehaviour
     [Header("Mirror")]
     [SerializeField] private NetworkManager mirrorNetworkManager;
     [SerializeField] private GameEventBridge gameEventBridge;
+
+    [Header("Networking Mode")]
+    [SerializeField]
+    [Tooltip(
+        "PeerToPeer: host calls StartHost(), others connect to hostAddress on the default transport port.\n" +
+        "DedicatedKCP: all clients connect to hostAddress:kcpPort from match_started (native builds).\n" +
+        "DedicatedWebSocket: all clients connect to hostAddress:wsPort from match_started (WebGL builds)."
+    )]
+    private ServerMode serverMode = ServerMode.PeerToPeer;
 
     [Header("Scene Layers")]
     [SerializeField] private GameObject lobbyLayer;
@@ -56,13 +72,11 @@ public class MirrorGameOrchestrator : MonoBehaviour
     // Match lifecycle
     // ---------------------------------------------------------------
 
-    private void HandleMatchStarted(string sceneName, string hostAddress)
+    private void HandleMatchStarted(string sceneName, string hostAddress, int kcpPort, int wsPort)
     {
-        // Guard 1: duplicate event protection (same pattern as GameOrchestrator).
         if (_inGame) return;
         _inGame = true;
 
-        // Guard 2: Mirror state check — catches mismatches even if _inGame is bypassed.
         if (NetworkClient.isConnected || NetworkServer.active)
         {
             Debug.LogWarning("[MirrorOrchestrator] Mirror is already running — ignoring match_started.");
@@ -73,33 +87,97 @@ public class MirrorGameOrchestrator : MonoBehaviour
         lobbyLayer.SetActive(false);
         gameLayer.SetActive(true);
 
-        // Subscribe to /game namespace now — socket is guaranteed initialized.
         gameEventBridge?.Subscribe();
 
+        switch (serverMode)
+        {
+            case ServerMode.PeerToPeer:
+                StartPeerToPeer(hostAddress);
+                break;
+
+            case ServerMode.DedicatedKCP:
+                StartDedicatedClient(hostAddress, kcpPort, "KcpTransport", "Port");
+                break;
+
+            case ServerMode.DedicatedWebSocket:
+                StartDedicatedClient(hostAddress, wsPort, "SimpleWebTransport", "clientPort");
+                break;
+        }
+    }
+
+    private void StartPeerToPeer(string hostAddress)
+    {
         if (store.IsHost)
         {
-            Debug.Log("[MirrorOrchestrator] Starting as host.");
+            Debug.Log("[MirrorOrchestrator] PeerToPeer — starting as host.");
             mirrorNetworkManager.StartHost();
+            return;
         }
-        else
+
+        if (string.IsNullOrEmpty(hostAddress))
         {
-            // Normalize hostAddress — fall back to localhost in editor/dev builds only.
-            if (string.IsNullOrEmpty(hostAddress))
-            {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-                Debug.LogWarning("[MirrorOrchestrator] hostAddress is null — falling back to localhost (dev only).");
-                hostAddress = "localhost";
+            Debug.LogWarning("[MirrorOrchestrator] hostAddress is null — falling back to localhost (dev only).");
+            hostAddress = "localhost";
 #else
-                Debug.LogError("[MirrorOrchestrator] hostAddress is null — cannot start client. Returning to lobby.");
-                ReturnToLobby();
-                return;
+            Debug.LogError("[MirrorOrchestrator] hostAddress is null — cannot start client. Returning to lobby.");
+            ReturnToLobby();
+            return;
 #endif
+        }
+
+        Debug.Log($"[MirrorOrchestrator] PeerToPeer — connecting to {hostAddress}");
+        mirrorNetworkManager.networkAddress = hostAddress;
+        mirrorNetworkManager.StartClient();
+    }
+
+    // Uses reflection to set the transport port so this sample compiles regardless
+    // of which optional Mirror transport packages (kcp2k, SimpleWebTransport) are installed.
+    private void StartDedicatedClient(string hostAddress, int port, string transportTypeName, string portFieldName)
+    {
+        if (string.IsNullOrEmpty(hostAddress))
+        {
+            Debug.LogError($"[MirrorOrchestrator] {serverMode} — hostAddress is null. Returning to lobby.");
+            ReturnToLobby();
+            return;
+        }
+
+        mirrorNetworkManager.networkAddress = hostAddress;
+
+        if (port > 0)
+        {
+            var target = FindTransport(mirrorNetworkManager.transport, transportTypeName);
+            if (target != null)
+            {
+                var field = target.GetType().GetField(portFieldName);
+                field?.SetValue(target, (ushort)port);
+            }
+            else
+            {
+                Debug.LogWarning($"[MirrorOrchestrator] {serverMode} — {transportTypeName} not found in transport hierarchy; using inspector port.");
+            }
+        }
+
+        Debug.Log($"[MirrorOrchestrator] {serverMode} — connecting to {hostAddress}:{port}");
+        mirrorNetworkManager.StartClient();
+    }
+
+    // Walks the transport tree: returns t itself if it matches, or searches
+    // MultiplexTransport children so Multiplex + KCP/SWT setups work correctly.
+    private static Transport FindTransport(Transport t, string typeName)
+    {
+        if (t == null) return null;
+        if (t.GetType().Name == typeName) return t;
+
+        var transportsField = t.GetType().GetField("transports");
+        if (transportsField?.GetValue(t) is Transport[] children)
+            foreach (var child in children)
+            {
+                var found = FindTransport(child, typeName);
+                if (found != null) return found;
             }
 
-            Debug.Log($"[MirrorOrchestrator] Starting as client → {hostAddress}");
-            mirrorNetworkManager.networkAddress = hostAddress;
-            mirrorNetworkManager.StartClient();
-        }
+        return null;
     }
 
     private void HandleLobbyDisconnected()
@@ -147,6 +225,5 @@ public class MirrorGameOrchestrator : MonoBehaviour
 
         // NOTE: socket.Shutdown() is intentionally omitted here.
         // LobbyNetworkManager.OnDestroy() handles it.
-        // If returning to a lobby scene that reuses the socket, do not call Shutdown().
     }
 }
