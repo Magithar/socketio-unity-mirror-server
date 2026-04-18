@@ -29,6 +29,10 @@ graph TD
     WGL -- "WSS" --> SWT
 ```
 
+## Full Setup Guide
+
+See [SETUP.md](SETUP.md) for the complete end-to-end process: build → GitHub Release → CI → Edgegap version → deploy → Render env vars → Unity test.
+
 ## Setup
 
 ### 1. Open the Unity project
@@ -75,16 +79,34 @@ The `build-server.yml` workflow fires on release publish, downloads the zip, pac
 
 Then in the Edgegap dashboard → select latest app version → **Deploy**.
 
+## Lobby server (Render)
+
+The dedicated server address/ports are injected into `match_started` by the lobby server (`mirror-server.js` on Render). Set these three env vars in Render after each new Edgegap deployment:
+
+| Key | Value |
+|-----|-------|
+| `MIRROR_SERVER_ADDRESS` | `<edgegap-fqdn>.pr.edgegap.net` |
+| `MIRROR_KCP_PORT` | external UDP port |
+| `MIRROR_WS_PORT` | external TCP/WS port |
+
+Render auto-redeploys on save. Clients receive the address and ports in `match_started` — no client changes needed.
+
 ## Connect clients
 
 After deploy, the Edgegap dashboard shows the host URL and external ports:
 
-- **Native (Win/Mac)**: NetworkAddress = `<edgegap-host>`, port = external UDP port
-- **WebGL**: NetworkAddress = `wss://<edgegap-host>:<external-ws-port>`
+- **Native (Win/Mac)**: `ServerMode = DedicatedKCP` in `MirrorGameOrchestrator`
+- **WebGL**: `ServerMode = DedicatedWebSocket`
 
 ## Free tier
 
 Edgegap's Mirror-partner free tier provides 1.5 vCPU. Stop deployments when not testing — they consume the allowance while running.
+
+## Keeping scripts in sync
+
+This project imports sample scripts from `com.magithar.socketio-unity`. When those scripts are updated in the main repo, copy the updated files to `Assets/Samples/Socket.IO Unity Client/1.4.0/` — or in Unity Package Manager, remove and re-import the affected samples.
+
+Scripts that must stay in sync: `LobbyStateStore`, `LobbyNetworkManager`, `LobbyUIController`, `MirrorGameOrchestrator`.
 
 ## Related
 
