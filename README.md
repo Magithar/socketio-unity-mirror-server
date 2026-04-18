@@ -12,15 +12,21 @@ Clients (WebGL + Windows/Mac) live in the [socketio-unity](https://github.com/Ma
 
 ## Architecture
 
-```
-                    Mirror server (Linux, Edgegap)
-                    MultiplexTransport
-                     ├── KcpTransport         :7777/udp
-                     └── SimpleWebTransport   :7778/tcp (WSS)
+```mermaid
+graph TD
+    subgraph Edgegap["Mirror Server (Linux · Edgegap)"]
+        MX[MultiplexTransport]
+        KCP[KcpTransport :7777/udp]
+        SWT[SimpleWebTransport :7778/tcp WSS]
+        MX --> KCP
+        MX --> SWT
+    end
 
-  Windows/Mac client                          WebGL client
-  KCP over UDP                                SimpleWebTransport/WSS
-  (GitHub Releases)                           (GitHub Pages)
+    WIN["Windows/Mac Client\n(GitHub Releases)"]
+    WGL["WebGL Client\n(GitHub Pages)"]
+
+    WIN -- "KCP / UDP" --> KCP
+    WGL -- "WSS" --> SWT
 ```
 
 ## Setup
