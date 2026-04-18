@@ -1,0 +1,60 @@
+name: Build & Push Mirror Server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Assets/**'
+      - 'Packages/**'
+      - 'ProjectSettings/**'
+      - 'Dockerfile'
+      - '.github/workflows/build-server.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Linux dedicated server + push to Edgegap
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Server-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Server-
+
+      - name: Build Linux dedicated server
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: StandaloneLinux64
+          customParameters: -standaloneBuildSubtarget Server
+          buildName: Server
+
+      - name: Move build output for Docker context
+        run: |
+          mkdir -p build
+          cp -r build/StandaloneLinux64/* build/ || cp -r build-StandaloneLinux64/* build/
+
+      - name: Log in to Edgegap registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.edgegap.com
+          username: ${{ secrets.EDGEGAP_REGISTRY_USER }}
+          password: ${{ secrets.EDGEGAP_REGISTRY_TOKEN }}
+
+      - name: Build & push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            registry.edgegap.com/${{ secrets.EDGEGAP_ORG }}/mirror-server:${{ github.sha }}
+            registry.edgegap.com/${{ secrets.EDGEGAP_ORG }}/mirror-server:latest

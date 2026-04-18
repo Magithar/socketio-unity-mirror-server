@@ -1,0 +1,59 @@
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# MemoryCaptures
+*.mcap
+
+# Asset meta data — keep
+!*.meta
+
+# Unity auto-generated
+sysinfo.txt
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+*.svd
+*.tmp
+*.user
+*.userprefs
+*.unityproj
+*.booproj
+*.suo
+*.csproj
+*.unityproj
+*.sln
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Crashlytics / Unity Cloud Build
+crashlytics-build.properties
+/[Aa]ssets/[Aa]ssetStoreTools*
+/[Aa]ssets/Plugins/Editor/JetBrains*
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
+
+# SpecStory
+.specstory/
+
+# Docker
+*.tar
+
+# Local build output
+build/
